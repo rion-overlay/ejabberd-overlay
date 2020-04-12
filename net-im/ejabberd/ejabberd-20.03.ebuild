@@ -9,16 +9,15 @@ inherit eutils pam rebar ssl-cert systemd
 
 DESCRIPTION="Robust, scalable and extensible XMPP server"
 HOMEPAGE="https://www.ejabberd.im/ https://github.com/processone/ejabberd/"
-SRC_URI="https://www.process-one.net/downloads/${PN}/${PV}/${P}.tgz
-	-> ${P}.tar.gz"
+SRC_URI="https://www.process-one.net/downloads/downloads-action.php?file=/${PV}/${P}.tgz"
 
 LICENSE="GPL-2"
 SLOT="0"
 KEYWORDS="~amd64 ~x86"
 REQUIRED_USE="mssql? ( odbc )"
 # TODO: Add 'tools' flag.
-IUSE="captcha debug full-xml hipe ldap mssql mysql nls odbc pam postgres redis
-	riak roster-gw sip sqlite stun zlib"
+IUSE="captcha debug full-xml hipe ldap mssql mysql odbc pam postgres redis
+	roster-gw sip sqlite stun zlib"
 
 RESTRICT="test"
 
@@ -29,42 +28,43 @@ RESTRICT="test"
 # TODO: )
 # TODO: luerl seems to be optional. review it
 CDEPEND="
-	>=dev-erlang/cache_tab-1.0.14
-	>=dev-erlang/eimp-1.0.6
-	>=dev-erlang/fast_tls-1.0.23
-	>=dev-erlang/fast_xml-1.1.31
-	>=dev-erlang/fast_yaml-1.0.15
-	>=dev-erlang/jiffy-0.14.8
-	>=dev-erlang/jose-1.8.4
-	>=dev-erlang/lager-3.4.2
+	>=dev-erlang/base64url-1.0
+	>=dev-erlang/cache_tab-1.0.22
+	>=dev-erlang/eimp-1.0.14
+	>=dev-erlang/idna-6.0.0
+	>=dev-erlang/fast_tls-1.1.4
+	>=dev-erlang/fast_xml-1.1.39
+	>=dev-erlang/fast_yaml-1.0.24
+	>=dev-erlang/jiffy-1.0.1
+	>=dev-erlang/jose-1.9.0
+	>=dev-erlang/lager-3.6.10
 	>=dev-erlang/luerl-0.3
-	>=dev-erlang/p1_oauth2-0.6.3
-	>=dev-erlang/p1_utils-1.0.12
-	>=dev-erlang/stringprep-1.0.12
-	>=dev-erlang/xmpp-1.2.1
+	>=dev-erlang/mqtree-1.0.7
+	>=dev-erlang/p1_acme-1.0.5
+	>=dev-erlang/p1_oauth2-0.6.6
+	>=dev-erlang/p1_utils-1.0.18
+	>=dev-erlang/pkix-1.0.5
+	>=dev-erlang/stringprep-1.0.19
+	>=dev-erlang/xmpp-1.4.5
+	>=dev-erlang/yconf-1.0.4
 	>=dev-lang/erlang-17.1[hipe?,odbc?,ssl]
 	>=net-im/jabber-base-0.01
 	ldap? ( =net-nds/openldap-2* )
-	mysql? ( >=dev-erlang/p1_mysql-1.0.6 )
-	nls? ( >=dev-erlang/iconv-1.0.8 )
+	mysql? ( >=dev-erlang/p1_mysql-1.0.14 )
 	odbc? ( dev-db/unixODBC )
-	pam? ( >=dev-erlang/epam-1.0.4 )
-	postgres? ( >=dev-erlang/p1_pgsql-1.1.6 )
+	pam? ( >=dev-erlang/epam-1.0.7 )
+	postgres? ( >=dev-erlang/p1_pgsql-1.1.9 )
 	redis? ( >=dev-erlang/eredis-1.0.8 )
-	riak? (
-		>=dev-erlang/hamcrest-0.1.0_p20150103
-		>=dev-erlang/riakc-2.5.3
-	)
-	sip? ( >=dev-erlang/esip-1.0.24 )
+	sip? ( >=dev-erlang/esip-1.0.32 )
 	sqlite? ( >=dev-erlang/sqlite3-1.1.6 )
-	stun? ( >=dev-erlang/stun-1.0.23 )
-	zlib? ( >=dev-erlang/ezlib-1.0.4 )"
+	stun? ( >=dev-erlang/stun-1.0.31 )
+	zlib? ( >=dev-erlang/ezlib-1.0.7 )"
 DEPEND="${CDEPEND}
 	>=sys-apps/gawk-4.1"
 RDEPEND="${CDEPEND}
 	captcha? ( media-gfx/imagemagick[truetype,png] )"
 
-DOCS=( README )
+DOCS=( README.md )
 PATCHES=( "${FILESDIR}/${P}-ejabberdctl.patch"
 	"${FILESDIR}/${P}-0002-Dont-overwrite-service-file.patch" )
 
@@ -111,15 +111,6 @@ customize_epam_wrapper() {
 		|| die 'failed to install epam-wrapper'
 }
 
-# Disable mod_irc in example configuration file.
-disable_mod_irc() {
-	local needs_iconv='needs dev-erlang/iconv (+nls USE flag)'
-	sed -r \
-		-e "s@^(\s*)(mod_irc\s*:.*$)@\1## \2 # ${needs_iconv}@" \
-		-i "${S}/ejabberd.yml.example" \
-		|| die 'failed to modify example config'
-}
-
 # Check if there already exists a certificate.
 ejabberd_cert_exists() {
 	local cert
@@ -149,12 +140,6 @@ ejabberd_cert_install() {
 # to something else than this should be adjusted here as well.
 get_ejabberd_path() {
 	echo "/usr/$(get_libdir)/${P}"
-}
-
-# Check whether mod_irc is enabled in ejabberd configuration on target system.
-is_mod_irc_enabled() {
-	egrep '^(\s*)(mod_irc\s*:.*$)' \
-		"${EROOT%/}${JABBER_ETC}/ejabberd.yml"
 }
 
 # Make ejabberd.service for systemd from upstream provided template.
@@ -203,7 +188,6 @@ src_prepare() {
 	make_ejabberd_service
 	skip_docs
 	adjust_config
-	use nls || disable_mod_irc
 	customize_epam_wrapper "${FILESDIR}/epam-wrapper"
 
 	rebar_fix_include_path fast_xml
@@ -233,12 +217,10 @@ src_configure() {
 		$(use_enable hipe) \
 		$(use_enable mssql) \
 		$(use_enable mysql) \
-		$(use_enable nls iconv) \
 		$(use_enable odbc) \
 		$(use_enable pam) \
 		$(use_enable postgres pgsql) \
 		$(use_enable redis) \
-		$(use_enable riak) \
 		$(use_enable roster-gw roster-gateway-workaround) \
 		$(use_enable sqlite) \
 		$(use_enable sip) \
@@ -328,10 +310,5 @@ pkg_postinst() {
 
 	if ! ejabberd_cert_exists; then
 		ejabberd_cert_install
-	fi
-
-	if ! use nls && is_mod_irc_enabled; then
-		ewarn "nls support (dev-erlang/iconv) is required by mod_irc. Either rebuild ejabberd"
-		ewarn "with nls enabled or disable mod_irc in ${EROOT%/}${JABBER_ETC}/ejabberd.yml."
 	fi
 }
